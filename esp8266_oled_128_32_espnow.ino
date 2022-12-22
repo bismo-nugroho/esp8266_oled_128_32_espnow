@@ -995,9 +995,58 @@ void doubleDisplay34(OLEDDisplay * display2, OLEDDisplayUiState * state, int16_t
 }
 
 
-FrameCallback frames3[] = { singleDisplay3, doubleDisplay3, doubleDisplay33, doubleDisplay34 };
 
-int frameCount3 = 4;
+void doubleDisplay35(OLEDDisplay * display2, OLEDDisplayUiState * state, int16_t x, int16_t y) {
+  ui3.disableIndicator();
+  display2->drawXbm(x + 0, y + 0, 21, 25, icon_setup);
+  display2->setFont(Dialog_plain_12);
+  display2->drawString(x + 22, y + 0, "Restart");
+  display2->drawLine(x + 23, y + 15, x + 75, y + 15);
+
+  display2->setFont(Dialog_plain_12);
+  display2->drawString(x + 24, y + 15, "Device");
+  display2->setFont(Dialog_plain_14);
+
+  //if ( mode == 0)
+  //  display2->drawString(x+ 0 + 80,y+12,String(adjvolt, 0));
+  //else
+ // display2->drawString(x + 0 + 84, y + 7, String((volt + adjvolt), 1));
+
+
+  if (mode == 1) {
+     mode = 0;
+     ESP.restart();
+     /*
+    display2->drawRect(x + 78, y + 3, 50, 26 );
+    if (increase ) {
+      if ( timericon + 600 < millis() )
+        timericon = millis();
+      display2->drawXbm(x + 115, y + 8, 9, 6, up_press);
+    }
+
+    if (millis() - timericon > 300) {
+      increase = false;
+      display2->drawXbm(x + 115, y + 8, 9, 6, up_release);
+    }
+
+
+    if (decrease ) {
+      if ( timericon + 600 < millis() )
+        timericon = millis();
+      display2->drawXbm(x + 115, y + 18, 9, 6, down_press);
+    }
+
+    if (millis() - timericon > 200) {
+      decrease = false;
+      display2->drawXbm(x + 115, y + 18, 9, 6, down_release);
+    }
+    */
+  }
+}
+
+FrameCallback frames3[] = { singleDisplay3, doubleDisplay3, doubleDisplay33, doubleDisplay34,doubleDisplay35 };
+
+int frameCount3 = 5;
 
 // Overlays are statically drawn on top of a frame eg. a clock
 OverlayCallback overlays3[] = { clockOverlay3 };
