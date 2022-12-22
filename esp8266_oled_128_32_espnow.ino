@@ -11,6 +11,8 @@
 //#include "DateTimeString.h"
 #include "SafeString.h"
 
+#include <Preferences.h>
+
 
 #include "SafeStringReader.h"
 
