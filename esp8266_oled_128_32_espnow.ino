@@ -11,7 +11,7 @@
 //#include "DateTimeString.h"
 #include "SafeString.h"
 
-#include <Preferences.h>
+//#include <Preferences.h>
 
 
 #include "SafeStringReader.h"
@@ -1401,9 +1401,6 @@ void OnDataSent(uint8_t *mac_addr, uint8_t sendStatus) {
     Serial.println("Delivery fail");
   }
 }
-
-
-
 
 
 createSafeStringReader(sfReader, 25, "#\r\n");
