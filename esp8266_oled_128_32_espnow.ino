@@ -1,3 +1,5 @@
+
+// IDE Arduino 1.18.15
 #include "Wire.h"
 #include "SSD1306.h"
 //#include "SH1106Wire.h"
@@ -6,6 +8,7 @@
 #include "images.h"
 //#include "arduino.h"
 #include <ESP8266WiFi.h>
+//Esp8266 v 3.0.2
 #include <espnow.h>
 //#include "DateTime.h"
 //#include "DateTimeString.h"
@@ -13,8 +16,8 @@
 
 //#include <Preferences.h>
 
-
 #include "SafeStringReader.h"
+//SafeString v4.1.15
 
 // Include the UI lib
 #include "OLEDDisplayUi.h"
