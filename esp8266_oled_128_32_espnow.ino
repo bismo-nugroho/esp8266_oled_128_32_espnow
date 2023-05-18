@@ -16,6 +16,26 @@
 
 #include "SafeStringReader.h"
 
+
+
+#include <ESP8266WiFi.h>
+#include <WiFiClient.h>
+#include <ESP8266WebServer.h>
+//#include <ESP8266mDNS.h>
+
+//#ifndef STASSID
+#define STASSID "AP-LCD-SERIAL"
+#define STAPSK  "AP-LCD-SERIAL"
+//#endif
+
+const char* host = "esp8266-webupdate";
+const char* ssid = STASSID;
+const char* password = STAPSK;
+
+ESP8266WebServer server(80);
+const char* serverIndex = "<form method='POST' action='/update' enctype='multipart/form-data'><input type='file' name='update'><input type='submit' value='Update'></form><br><form method=GET' action='/restart' enctype='multipart/form-data'><input style='color:red' type='submit' value='restart'></form>";
+
+
 // Include the UI lib
 #include "OLEDDisplayUi.h"
 #include "OneButton.h"
@@ -24,6 +44,7 @@
 
 
 uint8_t broadcastAddress[] = {0xe8, 0xdb, 0x84, 0xaf, 0xa3, 0x04};
+//uint8_t broadcastAddress[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
 
 uint8_t keyEncrypt[] = {21, 33, 65, 77, 19, 29, 40, 22, 88, 96, 20, 21, 33, 65, 77, 19};
@@ -68,6 +89,12 @@ CircularBuffer<float, 46> avolt;
 int buzzerPin = 14;
 int multimode = 0;
 int animring = 0;
+
+int IDdevice = 2;
+
+byte updates = 0;
+byte firmwareupdate = 0;
+String msgupdate = "";
 
 float voltwarn = 11;
 float tempwarn = 95;
@@ -143,11 +170,26 @@ int bat = 0;
 
 bool buzzer = false, buzzeron = false;
 
-//Melody melody(" (cgc*)***---");
-//Melody melody("c>>> d>> e>f g< a<< b<<< c*<<<<", 240);
+//Melody melody(" (cgc*)***-- -");
+//Melody melody("c >>> d >> e > f g < a << b <<< c* <<< < ", 240);
+
+
+enum MessageType {PAIRING, DATA, DATAGPS, DATAVOLT};
+
+typedef struct struct_incoming {
+  uint8_t msgType;
+  unsigned int id;
+} struct_incoming;
+
+//Create 2 struct_message
+
+// Create a struct_message called myData
+struct_incoming incomingData;
 
 
 typedef struct struct_message {
+  uint8_t msgType;
+  unsigned int id;
   double Lat;
   double Long;
   double odometer;
@@ -168,6 +210,8 @@ typedef struct struct_message {
 
 
 typedef struct struct_data {
+  uint8_t msgType;
+  unsigned int id;
   float coollant;
   float volt;
   int fanst;
@@ -191,71 +235,97 @@ struct_data rcvData;
 
 // Callback function that will be executed when data is received
 void OnDataRecv(uint8_t * mac, uint8_t *incomingData, uint8_t len) {
-  memcpy(&myData, incomingData, sizeof(myData));
-  strcpy(dates, myData.dates);
-  strcpy(times, myData.times);
-  //dates = myData.dates;
-  //times = myData.times;
-  satused = myData.num_sat;
-  satview = myData.satinview;
-  odo = myData.odometer / 1000;
-  speed = myData.gps_speed;
-  alt = myData.alt;
 
+
+  uint8_t type = incomingData[0];
 
 
   Serial.print("Bytes received: ");
   Serial.println(len);
 
+  Serial.print("type ");
+  Serial.println(type);
+  Serial.print("Mac: ");
+  printMAC(mac);
+  Serial.println();
 
-   Serial.print("Lat:");
-   Serial.println(myData.Lat);
+  switch (type) {
+    case DATA :      // we received data from server
+      break;
+    case DATAGPS :
+      //  break;
+      //case DATAVOLT:
+      // memcpy(&rcvData, incomingData, sizeof(rcvData));
 
- Serial.print("Lon:");
-   Serial.println(myData.Long);   
 
- Serial.print("odo:");
-   Serial.println(myData.odometer);   
 
- Serial.print("alt:");
-   Serial.println(myData.alt);
+      memcpy(&myData, incomingData, sizeof(myData));
+      strcpy(dates, myData.dates);
+      strcpy(times, myData.times);
+      //dates = myData.dates;
+      //times = myData.times;
+      satused = myData.num_sat;
+      satview = myData.satinview;
+      odo = myData.odometer / 1000;
+      speed = myData.gps_speed;
+      alt = myData.alt;
 
- Serial.print("speed:");
-   Serial.println(myData.gps_speed);   
 
- Serial.print("nunm_sat:");
-   Serial.println(myData.num_sat);
 
- Serial.print("sat in View:");
-   Serial.println(myData.satinview);      
+      Serial.print("Bytes received: ");
+      Serial.println(len);
 
- Serial.print("Date:");
-   Serial.println(myData.dates);   
 
- Serial.print("Time:");
-   Serial.println(myData.times);   
-   
-  ///Serial.print("Dates: ");
-  //Serial.println(myData.dates);
+      Serial.print("Lat: ");
+      Serial.println(myData.Lat);
 
-  //Serial.print("times: ");
-  //Serial.println(myData.times);
+      Serial.print("Lon: ");
+      Serial.println(myData.Long);
 
-  /*
-    Serial.print("Node: ");
-    Serial.println(myData.node);
-    Serial.print("Char: ");
-    Serial.println(myData.a);
-    Serial.print("Int: ");
-    Serial.println(myData.b);
-    Serial.print("Float: ");
-    Serial.println(myData.c);
-    Serial.print("String: ");
-    Serial.println(myData.d);
-    Serial.print("Bool: ");
-    Serial.println(myData.e);
-    Serial.println();
-  */
+      Serial.print("odo: ");
+      Serial.println(myData.odometer);
+
+      Serial.print("alt: ");
+      Serial.println(myData.alt);
+
+      Serial.print("speed: ");
+      Serial.println(myData.gps_speed);
+
+      Serial.print("nunm_sat: ");
+      Serial.println(myData.num_sat);
+
+      Serial.print("sat in View: ");
+      Serial.println(myData.satinview);
+
+      Serial.print("Date: ");
+      Serial.println(myData.dates);
+
+      Serial.print("Time: ");
+      Serial.println(myData.times);
+
+      ///Serial.print("Dates: ");
+      //Serial.println(myData.dates);
+
+      //Serial.print("times: ");
+      //Serial.println(myData.times);
+
+      /*
+        Serial.print("Node: ");
+        Serial.println(myData.node);
+        Serial.print("Char: ");
+        Serial.println(myData.a);
+        Serial.print("Int: ");
+        Serial.println(myData.b);
+        Serial.print("Float: ");
+        Serial.println(myData.c);
+        Serial.print("String: ");
+        Serial.println(myData.d);
+        Serial.print("Bool: ");
+        Serial.println(myData.e);
+        Serial.println();
+      */
+      break;
+  }
 }
 
 
@@ -365,8 +435,10 @@ void getEEPROM()
 
   //adjvolt = EEPROM.read(pos);
 
-  addr = sizeof(adjvolt);
-  pos += addr;
+  addr = addrs;
+  pos = addr;
+  firmwareupdate = EEPROM.read(pos);
+
 
 }
 
@@ -396,7 +468,7 @@ void clearparam() {
   strcpy(times, "");
   strcpy(dates, "");
   speed = 0;
-  //times[0]="/;
+  //times[0]=" /;
   //dates = "";
   satused = 0;
   satview = 0;
@@ -429,6 +501,8 @@ void putEEPROM()
 
   pos = writeFloat(pos, adjvolt);
 
+  EEPROM.write(pos, firmwareupdate);
+
   //adr =  putfloat(pos,adjtemp);
 
 
@@ -446,7 +520,8 @@ void putEEPROM()
   //addr = sizeof(adjspeed);
   //pos += addr;
 
-  //Serial.println("");
+  Serial.print("firmwareupdate=");
+  Serial.println(firmwareupdate);
   if (EEPROM.commit()) {
     Serial.println("Data successfully committed");
   } else {
@@ -496,6 +571,52 @@ void getSaved()
   if (flag == 1) {
     saveConfig();
   }
+}
+
+
+
+uint8_t channel = 9;
+
+void espnowsetup() {
+  // Init Serial Monitor
+  //Serial.begin(115200);
+
+
+  WiFi.setOutputPower(1);
+  // Set device as a Wi-Fi Station
+  WiFi.mode(WIFI_STA);
+
+
+
+  esp_now_deinit();
+  //WiFi.mode(WIFI_STA);
+  // set WiFi channel
+  wifi_promiscuous_enable(1);
+  wifi_set_channel(channel);
+  wifi_promiscuous_enable(0);
+  //WiFi.printDiag(Serial);
+  WiFi.disconnect();
+
+  // Init ESP-k
+  if (esp_now_init() != 0) {
+    Serial.println("Error initializing ESP-NOW");
+    return;
+  }
+
+  // Once ESPNow is successfully Init, we will register for Send CB to
+  // get the status of Trasnmitted packet
+  esp_now_set_self_role(ESP_NOW_ROLE_COMBO);
+
+  esp_now_register_send_cb(OnDataSent);
+
+
+  // Register peer
+  //esp_now_add_peer(broadcastAddress, ESP_NOW_ROLE_COMBO, 1, NULL, 0);
+  esp_now_add_peer(broadcastAddress, ESP_NOW_ROLE_COMBO, 1, keyEncrypt, 16);
+  //esp_now_add_peer(broadcastAddress1, ESP_NOW_ROLE_COMBO, 1, keyEncrypt, 16);
+
+  esp_now_register_recv_cb(OnDataRecv);
+
 }
 
 void saveConfig()
@@ -1012,43 +1133,45 @@ void doubleDisplay35(OLEDDisplay * display2, OLEDDisplayUiState * state, int16_t
   //if ( mode == 0)
   //  display2->drawString(x+ 0 + 80,y+12,String(adjvolt, 0));
   //else
- // display2->drawString(x + 0 + 84, y + 7, String((volt + adjvolt), 1));
+  // display2->drawString(x + 0 + 84, y + 7, String((volt + adjvolt), 1));
 
 
   if (mode == 1) {
-     mode = 0;
-     ESP.restart();
-     /*
-    display2->drawRect(x + 78, y + 3, 50, 26 );
-    if (increase ) {
-      if ( timericon + 600 < millis() )
-        timericon = millis();
-      display2->drawXbm(x + 115, y + 8, 9, 6, up_press);
-    }
-
-    if (millis() - timericon > 300) {
-      increase = false;
-      display2->drawXbm(x + 115, y + 8, 9, 6, up_release);
-    }
-
-
-    if (decrease ) {
-      if ( timericon + 600 < millis() )
-        timericon = millis();
-      display2->drawXbm(x + 115, y + 18, 9, 6, down_press);
-    }
-
-    if (millis() - timericon > 200) {
-      decrease = false;
-      display2->drawXbm(x + 115, y + 18, 9, 6, down_release);
-    }
-    */
+    mode = 0;
+    ESP.restart();
   }
 }
 
-FrameCallback frames3[] = { singleDisplay3, doubleDisplay3, doubleDisplay33, doubleDisplay34,doubleDisplay35 };
 
-int frameCount3 = 5;
+void doubleDisplay36(OLEDDisplay * display2, OLEDDisplayUiState * state, int16_t x, int16_t y) {
+  ui3.disableIndicator();
+  display2->drawXbm(x + 0, y + 0, 21, 25, icon_setup);
+  display2->setFont(Dialog_plain_12);
+  display2->drawString(x + 22, y + 0, "Update");
+  display2->drawLine(x + 23, y + 15, x + 75, y + 15);
+
+  display2->setFont(Dialog_plain_12);
+  display2->drawString(x + 24, y + 15, "Firmware");
+  display2->setFont(Dialog_plain_14);
+
+  //if ( mode == 0)
+  //  display2->drawString(x+ 0 + 80,y+12,String(adjvolt, 0));
+  //else
+  // display2->drawString(x + 0 + 84, y + 7, String((volt + adjvolt), 1));
+
+
+  if (mode == 1) {
+    mode = 0;
+    firmwareupdate = 1;
+    saveConfig();
+
+    ESP.restart();
+  }
+}
+
+FrameCallback frames3[] = { singleDisplay3, doubleDisplay3, doubleDisplay33, doubleDisplay34, doubleDisplay35 , doubleDisplay36 };
+
+int frameCount3 = 6;
 
 // Overlays are statically drawn on top of a frame eg. a clock
 OverlayCallback overlays3[] = { clockOverlay3 };
@@ -1389,11 +1512,19 @@ int frameCount4 = 4;
 OverlayCallback overlays4[] = { clockOverlay4 };
 int overlaysCount4 = 1;
 
-
+void printMAC(const uint8_t * mac_addr) {
+  char macStr[18];
+  snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x",
+           mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
+  Serial.print(macStr);
+}
 
 // Callback when data is sent
 void OnDataSent(uint8_t *mac_addr, uint8_t sendStatus) {
-  // Serial.print("Last Packet Send Status: ");
+  Serial.print("Last Packet Send Status: ");
+
+  Serial.println(WiFi.macAddress());
+
   if (sendStatus == 0) {
     Serial.println("Delivery success");
   }
@@ -1403,234 +1534,384 @@ void OnDataSent(uint8_t *mac_addr, uint8_t sendStatus) {
 }
 
 
-createSafeStringReader(sfReader, 25, "#\r\n");
+createSafeStringReader(sfReader, 100, "#\r\n");
+
+
+
+void refreshLCD() {
+  display.clear();
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.drawString(64, 6, msgupdate);
+  display.display();
+}
+
+
+
+void setupUpdate() {
+  display.flipScreenVertically();
+  display.setFont(ArialMT_Plain_10);
+  display2.flipScreenVertically();
+  display2.setFont(ArialMT_Plain_10);
+
+
+  msgupdate = "AP:" + String(ssid);
+  display2.clear();
+  display2.setTextAlignment(TEXT_ALIGN_CENTER);
+  display2.drawString(64, 6, msgupdate);
+  display2.display();
+
+  Serial.begin(115200);
+  Serial.println();
+  Serial.println("Booting Sketch...");
+  WiFi.mode(WIFI_AP_STA);
+
+  display.setFont(ArialMT_Plain_10);
+  msgupdate = "Updating Firmware";
+  refreshLCD();
+
+  WiFi.softAP(ssid, password);
+  // WiFi.begin(ssid, password);
+
+  Serial.println("Waiting for connection .");
+  //while (WiFi.status() != WL_CONNECTED) {
+  //   delay(500);
+  //   Serial.print(".");
+  //  }
+
+  msgupdate = "Access Point Mode..";
+  IPAddress IP = WiFi.softAPIP();
+  Serial.print("AP IP address: ");
+  Serial.println(IP);
+  delay(2000);
+
+  // Print ESP8266 Local IP Address
+  // Serial.println(WiFi.localIP());
+
+  msgupdate = "IP : " + String(IP[0]) + "." + String(IP[1]) + "." + String(IP[2]) + "." + String(IP[3]);
+
+  refreshLCD();
+
+
+  Serial.println("connected!");
+  //if (WiFi.waitForConnectResult() == WL_CONNECTED) {
+  //if ( WiFi.status() == WL_CONNECTED ){
+
+  //MDNS.begin(host);
+
+  server.on("/restart", HTTP_GET, []() {
+    server.sendHeader("Connection", "close");
+    server.send(200, "text/plain", "RESTARTING");
+
+    firmwareupdate = 0;
+    saveConfig();
+    msgupdate = "Restarting....";
+    refreshLCD();
+    delay(2000);
+    ESP.restart();
+  });
+
+  server.on("/", HTTP_GET, []() {
+    server.sendHeader("Connection", "close");
+    server.send(200, "text/html", serverIndex);
+  });
+  server.on("/update", HTTP_POST, []() {
+    server.sendHeader("Connection", "close");
+    server.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "UPDATE SUCCESS");
+    refreshLCD();
+    firmwareupdate = 0;
+    saveConfig();
+    delay(1000);
+    msgupdate = "Restarting....";
+    refreshLCD();
+    ESP.restart();
+  }, []() {
+    HTTPUpload& upload = server.upload();
+    if (upload.status == UPLOAD_FILE_START) {
+      msgupdate = "Uploading file...";
+      refreshLCD();
+      Serial.setDebugOutput(true);
+      //WiFiUDP::stopAll();
+      Serial.printf("Update: %s\n", upload.filename.c_str());
+      uint32_t maxSketchSpace = (ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000;
+      if (!Update.begin(maxSketchSpace)) { //start with max available size
+        Update.printError(Serial);
+      }
+    } else if (upload.status == UPLOAD_FILE_WRITE) {
+      if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+        Update.printError(Serial);
+      }
+      msgupdate = "Updloading File..";
+      refreshLCD();
+    } else if (upload.status == UPLOAD_FILE_END) {
+      if (Update.end(true)) { //true to set the size to the current progress
+        Serial.printf("Update Success: %u\nRebooting...\n", upload.totalSize);
+        msgupdate = "Update Finished!";
+        refreshLCD();
+      } else {
+        Update.printError(Serial);
+      }
+      Serial.setDebugOutput(false);
+    }
+    yield();
+  });
+  server.begin();
+  // MDNS.addService("http", "tcp", 80);
+
+  //Serial.printf("Ready! Open http://%s.local in your browser\n", host);
+  //} else {
+  //  Serial.println("WiFi Failed");
+  //  delay(2000);
+  //  setupUpdate();
+  //}
+}
 
 void setup() {
   Serial.begin(9600);
   EEPROM.begin(512);
-  //Serial.println("Start");
+  Serial.println("Start");
   getSaved();
-
-  //  pinMode(LED_BUILTIN, OUTPUT);
-
-  //musician.setMelody(&melody);
-  //musician.setBreath(1);            //milliseconds of silence at the end of notes
-  //musician.setLoudnessLimit(0, 16); //Depending on your hardware
-  //musician.setMelody(&melody);
-
-  //musician.play();
-  //musician.playSync(); //The instruction is blocked until the melody is finished.
-  buzzeron = true;
-  playBuzzer();
-  //playMelody();
-  /*
-    bselect.attachClick(clickselect);
-    bselect.attachDoubleClick(doubleclickselect);
-    bselect.attachLongPressStart(longPressStartselect);
-    bselect.attachLongPressStop(longPressStopselect);
-    bselect.attachDuringLongPress(longPressselect);
-  */
-
-  bmode.attachClick(clickmode);
-  bmode.attachDoubleClick(doubleclickmode);
-  bmode.attachLongPressStart(longPressStartmode);
-  bmode.attachLongPressStop(longPressStopmode);
-  bmode.attachDuringLongPress(longPressmode);
-
-  //pinMode(BUTTON_MODE, INPUT_PULLDOWN);
-  //  pinMode(BUTTON_SELECT, INPUT_PULLUP);
-
-  // Initialising the UI will init the display too.
-  display.init();
-  display2.init();
-
-  // This will make sure that multiple instances of a display driver
-  // running on different ports will work together transparently
-  display.setI2cAutoInit(true);
-  display2.setI2cAutoInit(true);
-
-  //display.flipScreenVertically();
-  //display.setFont(ArialMT_Plain_10);
-  //display.setTextAlignment(TEXT_ALIGN_LEFT);
-
-  //display2.flipScreenVertically();
-  display2.setFont(ArialMT_Plain_10);
-  display2.setTextAlignment(TEXT_ALIGN_LEFT);
+  //updates = 1;
 
 
-  //UI 1
-  ui.setTargetFPS(60);
-
-  // Customize the active and inactive symbol
-  ui.setActiveSymbol(activeSymbol);
-  ui.setInactiveSymbol(inactiveSymbol);
-
-  // You can change this to
-  // TOP, LEFT, BOTTOM, RIGHT
-  ui.setIndicatorPosition(TOP);
-
-  // Defines where the first frame is located in the bar.
-  ui.setIndicatorDirection(LEFT_RIGHT);
-
-  // You can change the transition that is used
-  // SLIDE_LEFT, SLIDE_RIGHT, SLIDE_UP, SLIDE_DOWN
-  ui.setFrameAnimation(SLIDE_LEFT);
-
-  // Add frames
-  ui.setFrames(frames, frameCount);
-
-  // Add overlays
-  ui.setOverlays(overlays, overlaysCount);
-  //display.setI2cAutoInit(true);
-  // Initialising the UI will init the display too.
-  ui.init();
-  //display.flipScreenVertically();
+  Serial.print("Update firmware=");
+  Serial.print(firmwareupdate);
 
 
-  //UI 2
-  ui2.setTargetFPS(60);
+  if (firmwareupdate == 1) {
+    display2.init();
+    display2.setI2cAutoInit(true);
 
-  // Customize the active and inactive symbol
-  ui2.setActiveSymbol(activeSymbol);
-  ui2.setInactiveSymbol(inactiveSymbol);
-
-  // You can change this to
-  // TOP, LEFT, BOTTOM, RIGHT
-  ui2.setIndicatorPosition(TOP);
-
-  // Defines where the first frame is located in the bar.
-  ui2.setIndicatorDirection(LEFT_RIGHT);
-  // ui2.setIndicatorDirection(SLIDE_DOWN);
-
-  // You can change the transition that is used
-  // SLIDE_LEFT, SLIDE_RIGHT, SLIDE_UP, SLIDE_DOWN
-  ui2.setFrameAnimation(SLIDE_DOWN);
-
-  // Add frames
-  ui2.setFrames(frames2, frameCount2);
-
-  // Add overlays
-  ui2.setOverlays(overlays2, overlaysCount2);
-  //display2.setI2cAutoInit(true);
-  // Initialising the UI will init the display too.
-  ui2.init();
-  //ui2.disableAutoTransition();
-  ui.disableAutoTransition();
-  ui2.disableAutoTransition();
+    display.init();
+    display.setI2cAutoInit(true);
+    setupUpdate();
 
 
+  } else {
+    //  pinMode(LED_BUILTIN, OUTPUT);
 
-  //UI 3
-  ui3.setTargetFPS(60);
+    //musician.setMelody(&melody);
+    //musician.setBreath(1);            //milliseconds of silence at the end of notes
+    //musician.setLoudnessLimit(0, 16); //Depending on your hardware
+    //musician.setMelody(&melody);
 
-  // Customize the active and inactive symbol
-  ui3.setActiveSymbol(activeSymbol);
-  ui3.setInactiveSymbol(inactiveSymbol);
+    //musician.play();
+    //musician.playSync(); //The instruction is blocked until the melody is finished.
+    buzzeron = true;
+    playBuzzer();
+    //playMelody();
+    /*
+      bselect.attachClick(clickselect);
+      bselect.attachDoubleClick(doubleclickselect);
+      bselect.attachLongPressStart(longPressStartselect);
+      bselect.attachLongPressStop(longPressStopselect);
+      bselect.attachDuringLongPress(longPressselect);
+    */
 
-  // You can change this to
-  // TOP, LEFT, BOTTOM, RIGHT
-  ui3.setIndicatorPosition(TOP);
+    bmode.attachClick(clickmode);
+    bmode.attachDoubleClick(doubleclickmode);
+    bmode.attachLongPressStart(longPressStartmode);
+    bmode.attachLongPressStop(longPressStopmode);
+    bmode.attachDuringLongPress(longPressmode);
 
-  // Defines where the first frame is located in the bar.
-  ui3.setIndicatorDirection(LEFT_RIGHT);
-  // ui2.setIndicatorDirection(SLIDE_DOWN);
+    //pinMode(BUTTON_MODE, INPUT_PULLDOWN);
+    //  pinMode(BUTTON_SELECT, INPUT_PULLUP);
 
-  // You can change the transition that is used
-  // SLIDE_LEFT, SLIDE_RIGHT, SLIDE_UP, SLIDE_DOWN
-  ui3.setFrameAnimation(SLIDE_UP);
+    // Initialising the UI will init the display too.
+    display.init();
+    display2.init();
 
-  // Add frames
-  ui3.setFrames(frames3, frameCount3);
+    // This will make sure that multiple instances of a display driver
+    // running on different ports will work together transparently
+    display.setI2cAutoInit(true);
+    display2.setI2cAutoInit(true);
 
-  // Add overlays
-  ui3.setOverlays(overlays3, overlaysCount3);
-  //display2.setI2cAutoInit(true);
-  // Initialising the UI will init the display too.
-  ui3.init();
-  //ui2.disableAutoTransition();
-  ui3.disableAutoTransition();
+    //display.flipScreenVertically();
+    //display.setFont(ArialMT_Plain_10);
+    //display.setTextAlignment(TEXT_ALIGN_LEFT);
+
+    //display2.flipScreenVertically();
+    display2.setFont(ArialMT_Plain_10);
+    display2.setTextAlignment(TEXT_ALIGN_LEFT);
+
+
+    //UI 1
+    ui.setTargetFPS(60);
+
+    // Customize the active and inactive symbol
+    ui.setActiveSymbol(activeSymbol);
+    ui.setInactiveSymbol(inactiveSymbol);
+
+    // You can change this to
+    // TOP, LEFT, BOTTOM, RIGHT
+    ui.setIndicatorPosition(TOP);
+
+    // Defines where the first frame is located in the bar.
+    ui.setIndicatorDirection(LEFT_RIGHT);
+
+    // You can change the transition that is used
+    // SLIDE_LEFT, SLIDE_RIGHT, SLIDE_UP, SLIDE_DOWN
+    ui.setFrameAnimation(SLIDE_LEFT);
+
+    // Add frames
+    ui.setFrames(frames, frameCount);
+
+    // Add overlays
+    ui.setOverlays(overlays, overlaysCount);
+    //display.setI2cAutoInit(true);
+    // Initialising the UI will init the display too.
+    ui.init();
+    //display.flipScreenVertically();
+
+
+    //UI 2
+    ui2.setTargetFPS(60);
+
+    // Customize the active and inactive symbol
+    ui2.setActiveSymbol(activeSymbol);
+    ui2.setInactiveSymbol(inactiveSymbol);
+
+    // You can change this to
+    // TOP, LEFT, BOTTOM, RIGHT
+    ui2.setIndicatorPosition(TOP);
+
+    // Defines where the first frame is located in the bar.
+    ui2.setIndicatorDirection(LEFT_RIGHT);
+    // ui2.setIndicatorDirection(SLIDE_DOWN);
+
+    // You can change the transition that is used
+    // SLIDE_LEFT, SLIDE_RIGHT, SLIDE_UP, SLIDE_DOWN
+    ui2.setFrameAnimation(SLIDE_DOWN);
+
+    // Add frames
+    ui2.setFrames(frames2, frameCount2);
+
+    // Add overlays
+    ui2.setOverlays(overlays2, overlaysCount2);
+    //display2.setI2cAutoInit(true);
+    // Initialising the UI will init the display too.
+    ui2.init();
+    //ui2.disableAutoTransition();
+    ui.disableAutoTransition();
+    ui2.disableAutoTransition();
 
 
 
+    //UI 3
+    ui3.setTargetFPS(60);
 
-  //UI 4
-  ui4.setTargetFPS(60);
+    // Customize the active and inactive symbol
+    ui3.setActiveSymbol(activeSymbol);
+    ui3.setInactiveSymbol(inactiveSymbol);
 
-  // Customize the active and inactive symbol
-  ui4.setActiveSymbol(activeSymbol);
-  ui4.setInactiveSymbol(inactiveSymbol);
+    // You can change this to
+    // TOP, LEFT, BOTTOM, RIGHT
+    ui3.setIndicatorPosition(TOP);
 
-  // You can change this to
-  // TOP, LEFT, BOTTOM, RIGHT
-  ui4.setIndicatorPosition(TOP);
+    // Defines where the first frame is located in the bar.
+    ui3.setIndicatorDirection(LEFT_RIGHT);
+    // ui2.setIndicatorDirection(SLIDE_DOWN);
 
-  // Defines where the first frame is located in the bar.
-  ui4.setIndicatorDirection(LEFT_RIGHT);
-  // ui2.setIndicatorDirection(SLIDE_DOWN);
+    // You can change the transition that is used
+    // SLIDE_LEFT, SLIDE_RIGHT, SLIDE_UP, SLIDE_DOWN
+    ui3.setFrameAnimation(SLIDE_UP);
 
-  // You can change the transition that is used
-  // SLIDE_LEFT, SLIDE_RIGHT, SLIDE_UP, SLIDE_DOWN
-  ui4.setFrameAnimation(SLIDE_UP);
+    // Add frames
+    ui3.setFrames(frames3, frameCount3);
 
-  // Add frames
-  ui4.setFrames(frames4, frameCount4);
-
-  // Add overlays
-  ui4.setOverlays(overlays4, overlaysCount4);
-  //display2.setI2cAutoInit(true);
-  // Initialising the UI will init the display too.
-  ui4.init();
-  //ui2.disableAutoTransition();
-  ui4.disableAutoTransition();
-
+    // Add overlays
+    ui3.setOverlays(overlays3, overlaysCount3);
+    //display2.setI2cAutoInit(true);
+    // Initialising the UI will init the display too.
+    ui3.init();
+    //ui2.disableAutoTransition();
+    ui3.disableAutoTransition();
 
 
-  //display2.flipScreenVertically();
-  pinMode(BUZZ, OUTPUT); // Set buzzer - pin 5 as an output
-
-  display.flipScreenVertically();
-  display2.flipScreenVertically();
-
-  display.clear();
-  display.drawXbm(25, 0, 76, 32, chery_logo);
-  display.display();
-
-  display2.clear();
-  display2.drawXbm(0, 0, 128, 32, chery_text);
-  display2.display();
-
-  delay(2000);
 
 
-  //main screen
-  screen  = 1;
+    //UI 4
+    ui4.setTargetFPS(60);
 
-  sfReader.connect(Serial); // where SafeStringReader will read from
+    // Customize the active and inactive symbol
+    ui4.setActiveSymbol(activeSymbol);
+    ui4.setInactiveSymbol(inactiveSymbol);
 
-  //espnow receiver
+    // You can change this to
+    // TOP, LEFT, BOTTOM, RIGHT
+    ui4.setIndicatorPosition(TOP);
 
-  WiFi.setOutputPower(2);
-  WiFi.mode(WIFI_STA);
+    // Defines where the first frame is located in the bar.
+    ui4.setIndicatorDirection(LEFT_RIGHT);
+    // ui2.setIndicatorDirection(SLIDE_DOWN);
 
-  // Init ESP-NOW
-  if (esp_now_init() != 0) {
-    Serial.println("Error initializing ESP-NOW");
-    return;
+    // You can change the transition that is used
+    // SLIDE_LEFT, SLIDE_RIGHT, SLIDE_UP, SLIDE_DOWN
+    ui4.setFrameAnimation(SLIDE_UP);
+
+    // Add frames
+    ui4.setFrames(frames4, frameCount4);
+
+    // Add overlays
+    ui4.setOverlays(overlays4, overlaysCount4);
+    //display2.setI2cAutoInit(true);
+    // Initialising the UI will init the display too.
+    ui4.init();
+    //ui2.disableAutoTransition();
+    ui4.disableAutoTransition();
+
+
+
+    //display2.flipScreenVertically();
+    pinMode(BUZZ, OUTPUT); // Set buzzer - pin 5 as an output
+
+    display.flipScreenVertically();
+    display2.flipScreenVertically();
+
+    display.clear();
+    display.drawXbm(25, 0, 76, 32, chery_logo);
+    display.display();
+
+    display2.clear();
+    display2.drawXbm(0, 0, 128, 32, chery_text);
+    display2.display();
+
+    delay(2000);
+
+
+    //main screen
+    screen  = 1;
+
+    sfReader.connect(Serial); // where SafeStringReader will read from
+
+    //espnow receiver
+
+
+
+    espnowsetup();
+    /*
+      WiFi.setOutputPower(2);
+      WiFi.mode(WIFI_STA);
+
+      // Init ESP-NOW
+      if (esp_now_init() != 0) {
+        Serial.println("Error initializing ESP-NOW");
+        return;
+      }
+
+      // Once ESPNow is successfully Init, we will register for Send CB to
+      // get the status of Trasnmitted packet
+      esp_now_set_self_role(ESP_NOW_ROLE_COMBO);
+
+      esp_now_register_send_cb(OnDataSent);
+
+
+      // Register peer
+      //  esp_now_add_peer(broadcastAddress, ESP_NOW_ROLE_COMBO, 1, NULL, 0);
+      esp_now_add_peer(broadcastAddress, ESP_NOW_ROLE_COMBO, 1, keyEncrypt, 16);
+
+      esp_now_register_recv_cb(OnDataRecv);
+    */
   }
-
-  // Once ESPNow is successfully Init, we will register for Send CB to
-  // get the status of Trasnmitted packet
-  esp_now_set_self_role(ESP_NOW_ROLE_COMBO);
-
-  esp_now_register_send_cb(OnDataSent);
-
-
-  // Register peer
-  //  esp_now_add_peer(broadcastAddress, ESP_NOW_ROLE_COMBO, 1, NULL, 0);
-  esp_now_add_peer(broadcastAddress, ESP_NOW_ROLE_COMBO, 1, keyEncrypt, 16);
-
-  esp_now_register_recv_cb(OnDataRecv);
-
 }
 
 String buff = "";
@@ -1669,8 +1950,6 @@ long string_to_long (String number)
   return result;
 }
 
-int updates = 0;
-
 
 
 void processCommand(SafeString &cmd) {
@@ -1681,6 +1960,13 @@ void processCommand(SafeString &cmd) {
 
   int i = 0;
   float f = 0.0;
+
+  initserial++;
+  if (initserial > 150) {
+    initserial = 1;
+    idleserial = 0;
+
+  }
 
 
   //  values.replace("#", "");
@@ -2183,197 +2469,208 @@ unsigned long timerDelay = 1000;  // send readings timer
 
 
 void loop() {
-  //  bselect.tick();
-  bmode.tick();
 
 
-  if ((millis() - lastTime) > timerDelay) {
-    // Set values to send
-    //strcpy(myData.Node, "MID Display");
-/*
-    rcvData.coollant = (temp + adjtemp);
-    rcvData.volt = (volt + adjvolt);
-    rcvData.fanst = fanset;
-    rcvData.tempset = tempset;
-    rcvData.acstat = compstat;
-    rcvData.temp = tempcurr;
-*/
+  if (firmwareupdate == 1) {
+
+    server.handleClient();
+    //    MDNS.update();
+  } else {
+
+
+    //  bselect.tick();
+    bmode.tick();
+
+
+    if ((millis() - lastTime) > timerDelay) {
+      // Set values to send
+      //strcpy(myData.Node, "MID Display");
+      /*
+          rcvData.coollant = (temp + adjtemp);
+          rcvData.volt = (volt + adjvolt);
+          rcvData.fanst = fanset;
+          rcvData.tempset = tempset;
+          rcvData.acstat = compstat;
+          rcvData.temp = tempcurr;
+      */
+
+
+      rcvData.msgType = DATAVOLT;
+      rcvData.id = IDdevice;
+      rcvData.coollant = 70.20;
+      rcvData.volt = 12.48;
+      rcvData.fanst = 1;
+      rcvData.tempset = 18.21;
+      rcvData.acstat = 1;
+      rcvData.temp = 27.18;
+      /*
+
+            Serial.print("collant: ");
+          Serial.println(rcvData.coollant);
+          Serial.print("FAN: ");
+          Serial.println( rcvData.fanst);
+          Serial.print("BAT: ");
+          Serial.println(rcvData.volt);
+          Serial.print("rcvData.tempset");
+          Serial.println( rcvData.tempset );
+          Serial.print("AC");
+          Serial.println(  rcvData.acstat );
+          Serial.println();
+      */
+
+      // Send message via ESP-NOW
+      esp_now_send(broadcastAddress, (uint8_t *) &rcvData, sizeof(rcvData));
+
+      lastTime = millis();
+    }
+
+
+    if (millis() - timerwarn > 1000) {
+
+      blinkwarn = !blinkwarn;
+      timerwarn = millis();
+      idleserial++;
+    }
+
+    if ( idleserial >= 7) {
+      if (initserial < 5 && initserial > 0 ) {
+        clearparam();
+        initserial = 1;
+      }
+      idleserial = 0;
+    }
+
+
+    if (sfReader.read()) {
+
+      //if (!checkSum(sfReader)) { // is the check sum OK
+
+      // Serial.println(sfReader);
+      processCommand(sfReader);
+      // }
+
+
+    }
+
+    //listenSerial();
 
 
 
-  rcvData.coollant = 70.20;
-    rcvData.volt = 12.48;
-    rcvData.fanst = 1;
-    rcvData.tempset = 18.21;
-    rcvData.acstat = 1;
-    rcvData.temp = 27.18;  
+
+
+    //float vvolt = 0;
+    //float vtemp = 0;
+
+    //vvolt = volt + adjvolt;
+    //vtemp = temp + adjtemp;
+
+    //  temp = vtemp;
+    //  volt = vvolt;
+
+    // Serial.println("temp="+String(temp,1)+",volt="+String(volt,1)+",adjtemp="+String(adjtemp,1)+",adjvolt="+String(adjvolt,1));
+
+
+
+
+    // UI 1 Display
+    int remainingTimeBudget = ui.update();
+    if (remainingTimeBudget > 0) {
+      // You can do some work here
+      // Don't do stuff if you are below your
+      // time budget.
+      delay(remainingTimeBudget);
+
+    }
+
+    if ( screen == 1 ) {
+      //UI 2 display
+      int remainingTimeBudget2 = ui2.update();
+      if (remainingTimeBudget2 > 0) {
+        // You can do some work here
+        // Don't do stuff if you are below your
+        // time budget.
+        delay(remainingTimeBudget2);
+
+      }
+    } else if (screen == 2) {
+      //settings
+      //UI 2 display
+      int remainingTimeBudget3 = ui3.update();
+      if (remainingTimeBudget3 > 0) {
+        // You can do some work here
+        // Don't do stuff if you are below your
+        // time budget.
+        delay(remainingTimeBudget3);
+
+      }
+    } else if (screen == 3) {
+      //settings
+      //UI 3 display
+      int remainingTimeBudget4 = ui4.update();
+      if (remainingTimeBudget4 > 0) {
+        // You can do some work here
+        // Don't do stuff if you are below your
+        // time budget.
+        delay(remainingTimeBudget4);
+
+      }
+    }
+
+
+    if (millis() - timers > 1000) {
+      timers = millis();
+      //Serial.print("Free Memory:");
+      //Serial.println(ESP.getFreeHeap());
+      //Serial.println("temp="+String(temp,1)+",volt="+String(volt,1)+",adjtemp="+String(adjtemp,1)+",adjvolt="+String(adjvolt,1));
+      //Serial.println("ST,+000099.3  g");
+    }
+
+
+    //musician.refresh();
+
+    if (millis() - timerb > 300)
+    {
+
+      playBuzzer();
+      //musician.playSync(); //The instruction is blocked until the melody is finished.
+      //playMelody();
+      timerb = millis();
+    }
+
+    getAlarm();
+    collectDataGraph();
+
+
+    //if (millis() - timersend > 500 && updates==1) {
+    //  timersend = millis();
+    //   sendDataMonitor();
+    //}
+
     /*
+      //display.clear();
+      display2.clear();
 
-          Serial.print("collant: ");
-        Serial.println(rcvData.coollant);
-        Serial.print("FAN: ");
-        Serial.println( rcvData.fanst);
-        Serial.print("BAT: ");
-        Serial.println(rcvData.volt);
-        Serial.print("rcvData.tempset");
-        Serial.println( rcvData.tempset );
-        Serial.print("AC");
-        Serial.println(  rcvData.acstat );
-        Serial.println();
+      //display.drawRect(80, 0, 45, 32);
+
+
+
+      //display.setFont(ArialMT_Plain_10);
+      //display.drawString(0, 0, "Coolant Temp:");
+
+      //display.drawXbm(0, 0, 32, 29, tempicon);
+
+      display2.setFont(ArialMT_Plain_10);
+      display2.drawString(0, 0, "Battery Voltage :");
+
+      //display.setFont(ArialMT_Plain_24);
+      //display.drawString(0, 10, String(temp,1)+" C");
+
+      display2.setFont(ArialMT_Plain_24);
+      display2.drawString(0, 10, String(volt,1)+" V");
+
+      //display.display();
+      display2.display();
+
     */
-
-    // Send message via ESP-NOW
-    esp_now_send(broadcastAddress, (uint8_t *) &rcvData, sizeof(rcvData));
-
-    lastTime = millis();
   }
-
-
-  if (millis() - timerwarn > 1000) {
-
-    blinkwarn = !blinkwarn;
-    timerwarn = millis();
-    idleserial++;
-  }
-
-  if ( idleserial >= 7) {
-    if (initserial < 5 && initserial > 0 ) {
-      clearparam();
-      initserial = 1;
-    }
-    idleserial = 0;
-  }
-
-
-  if (sfReader.read()) {
-
-    //if (!checkSum(sfReader)) { // is the check sum OK
-
-    // Serial.println(sfReader);
-    processCommand(sfReader);
-    // }
-
-
-  }
-
-  //listenSerial();
-
-
-
-
-
-  //float vvolt = 0;
-  //float vtemp = 0;
-
-  //vvolt = volt + adjvolt;
-  //vtemp = temp + adjtemp;
-
-  //  temp = vtemp;
-  //  volt = vvolt;
-
-  // Serial.println("temp="+String(temp,1)+",volt="+String(volt,1)+",adjtemp="+String(adjtemp,1)+",adjvolt="+String(adjvolt,1));
-
-
-
-
-  // UI 1 Display
-  int remainingTimeBudget = ui.update();
-  if (remainingTimeBudget > 0) {
-    // You can do some work here
-    // Don't do stuff if you are below your
-    // time budget.
-    delay(remainingTimeBudget);
-
-  }
-
-  if ( screen == 1 ) {
-    //UI 2 display
-    int remainingTimeBudget2 = ui2.update();
-    if (remainingTimeBudget2 > 0) {
-      // You can do some work here
-      // Don't do stuff if you are below your
-      // time budget.
-      delay(remainingTimeBudget2);
-
-    }
-  } else if (screen == 2) {
-    //settings
-    //UI 2 display
-    int remainingTimeBudget3 = ui3.update();
-    if (remainingTimeBudget3 > 0) {
-      // You can do some work here
-      // Don't do stuff if you are below your
-      // time budget.
-      delay(remainingTimeBudget3);
-
-    }
-  } else if (screen == 3) {
-    //settings
-    //UI 3 display
-    int remainingTimeBudget4 = ui4.update();
-    if (remainingTimeBudget4 > 0) {
-      // You can do some work here
-      // Don't do stuff if you are below your
-      // time budget.
-      delay(remainingTimeBudget4);
-
-    }
-  }
-
-
-  if (millis() - timers > 1000) {
-    timers = millis();
-    //Serial.print("Free Memory:");
-    //Serial.println(ESP.getFreeHeap());
-    //Serial.println("temp="+String(temp,1)+",volt="+String(volt,1)+",adjtemp="+String(adjtemp,1)+",adjvolt="+String(adjvolt,1));
-    //Serial.println("ST,+000099.3  g");
-  }
-
-
-  //musician.refresh();
-
-  if (millis() - timerb > 300)
-  {
-
-    playBuzzer();
-    //musician.playSync(); //The instruction is blocked until the melody is finished.
-    //playMelody();
-    timerb = millis();
-  }
-
-  getAlarm();
-  collectDataGraph();
-
-
-  //if (millis() - timersend > 500 && updates==1) {
-  //  timersend = millis();
-  //   sendDataMonitor();
-  //}
-
-  /*
-    //display.clear();
-    display2.clear();
-
-    //display.drawRect(80, 0, 45, 32);
-
-
-
-    //display.setFont(ArialMT_Plain_10);
-    //display.drawString(0, 0, "Coolant Temp:");
-
-    //display.drawXbm(0, 0, 32, 29, tempicon);
-
-    display2.setFont(ArialMT_Plain_10);
-    display2.drawString(0, 0, "Battery Voltage :");
-
-    //display.setFont(ArialMT_Plain_24);
-    //display.drawString(0, 10, String(temp,1)+" C");
-
-    display2.setFont(ArialMT_Plain_24);
-    display2.drawString(0, 10, String(volt,1)+" V");
-
-    //display.display();
-    display2.display();
-
-  */
 }
